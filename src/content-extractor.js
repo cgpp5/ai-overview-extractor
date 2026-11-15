@@ -1,13 +1,25 @@
 class ContentExtractor {
     constructor() {
         // This class handles extraction of content and sources from AI Overview containers
+        this.hiddenMarker = 'data-aioe-hidden';
     }
 
     extractContent(container) {
         console.log('[ContentExtractor] Ekstraktuję treść z:', container);
 
+        const hiddenNodes = this.markUnrenderedNodes(container);
+
         // Stwórz kopię kontenera do manipulacji
-        const clonedContainer = container.cloneNode(true);
+        let clonedContainer;
+        try {
+            clonedContainer = container.cloneNode(true);
+        } finally {
+            hiddenNodes.forEach((node) => node.removeAttribute(this.hiddenMarker));
+        }
+
+        // Google hides sidebars and other panes with classes/aria-hidden, not with
+        // inline styles, so they have to be found through live layout before cloning.
+        clonedContainer.querySelectorAll(`[${this.hiddenMarker}]`).forEach((node) => node.remove());
 
         // Usuń elementy z data-subtree="msc"
         const mscElements = clonedContainer.querySelectorAll('div[data-subtree="msc"]');
@@ -91,6 +103,57 @@ class ContentExtractor {
         console.log('[ContentExtractor] Oczyszczony HTML:', cleanHTML.substring(0, 200) + '...');
 
         return cleanHTML;
+    }
+
+    /**
+     * Marks descendants that take no space on screen so the clone can drop them.
+     * Elements with `display: contents` have no box themselves but render their
+     * children, so a node is only marked when neither it nor any descendant is
+     * rendered. Only runs when the container itself is rendered; when the
+     * overview is hidden, nothing is filtered and the previous behavior is kept.
+     */
+    markUnrenderedNodes(container) {
+        const marked = [];
+
+        if (typeof container.getClientRects !== 'function' || container.getClientRects().length === 0) {
+            return marked;
+        }
+
+        const nodes = Array.from(container.querySelectorAll('*'));
+        const rendered = new Map();
+
+        // querySelectorAll returns document order, so walking backwards visits
+        // every child before its parent.
+        for (let index = nodes.length - 1; index >= 0; index--) {
+            const node = nodes[index];
+            const selfRendered = node.getClientRects().length > 0;
+            let subtreeRendered = selfRendered;
+
+            if (!selfRendered) {
+                for (const child of node.children) {
+                    if (rendered.get(child)) {
+                        subtreeRendered = true;
+                        break;
+                    }
+                }
+            }
+
+            rendered.set(node, subtreeRendered);
+
+            if (!subtreeRendered) {
+                node.setAttribute(this.hiddenMarker, '');
+                marked.push(node);
+            }
+        }
+
+        if (nodes.length > 0 && marked.length === nodes.length) {
+            // Nothing in the container reports a box while the container does:
+            // treat the layout as unreliable instead of returning empty content.
+            marked.forEach((node) => node.removeAttribute(this.hiddenMarker));
+            return [];
+        }
+
+        return marked;
     }
 
     extractSources(container) {

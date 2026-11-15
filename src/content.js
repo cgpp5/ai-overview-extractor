@@ -47,6 +47,15 @@ class AIOverviewExtractor {
         // Setup state machine callbacks
         this.setupStateMachineCallbacks();
         
+        // Batch runner runs from its own storage-driven queue, independent
+        // from the automation toggles above
+        if (typeof BatchRunner !== 'undefined') {
+            this.batchRunner = new BatchRunner({ settingsManager: this.settingsManager });
+            this.batchRunner.start().catch(error => {
+                console.error('[AI Overview Extractor] Batch runner error:', error);
+            });
+        }
+        
         // Start unified container detection
         this.containerDetectionManager.startDetection();
     }
@@ -267,6 +276,7 @@ class AIOverviewExtractor {
                 webhook: this.circuitBreakers.webhook.getMetrics()
             },
             containerDetection: this.containerDetectionManager.getStatus(),
+            batchRunner: this.batchRunner ? this.batchRunner.getStatus() : null,
             settings: this.settings
         };
     }

@@ -300,6 +300,74 @@ enableStrategy(strategy)             // Enable detection strategy
 
 ---
 
+### 🔁 Batch Automation Modules
+
+#### `batch-queue.js` - Queue Expansion and Run Storage
+
+**Purpose**: Shared helpers for the popup and the batch runner. No DOM access, so it runs in both contexts.
+
+**Classes**: `QueryTemplate`, `BatchStore`
+
+**QueryTemplate**:
+```javascript
+discoverPlaceholders(template)                     // ["city", "month"] in first-seen order
+parseValues(raw)                                   // newline separated; commas when single line; deduped
+expand(template, valuesByPlaceholder)              // { queries: [{query, variables}], duplicates, error }
+buildSearchUrl(query, { language, runId })         // https://www.google.com/search?q=...&hl=...&aioe_run=...
+normalizeQuery(query)                              // case/whitespace insensitive comparison
+createRunId()                                      // run-YYYYMMDDHHMMSS-xxxx
+```
+
+**Expansion rules**:
+- The first placeholder is the outer loop (`city` outer, `month` inner)
+- Queries that end up identical after whitespace collapsing are dropped and counted as `duplicates`
+- Nothing is returned when a placeholder has no values or the product exceeds 1000 queries
+
+**BatchStore**:
+```javascript
+getState() / saveState(state) / patchState(patch)
+saveResult(result) / getResults(runId) / countByStatus(results)
+clearResults(runId?) / clearOtherRuns(runId)
+getInputs() / saveInputs(inputs)
+onStateChanged(callback)
+```
+
+**Storage layout**:
+- `aioe:batch:state` - single run state: `runId`, `status`, `queryIndex`, `queries`, `config`, `counts`, `pageToken`
+- `aioe:batch:result:<runId>:<index>` - one entry per extracted query
+- `aioe:batch:inputs` - last used template, values and options
+
+Every result has its own key, so appending a result never rewrites the whole result set.
+
+---
+
+#### `batch-runner.js` - Batch Loop
+
+**Purpose**: Runs the queue stored by the popup, one Google search per page load.
+
+**Class**: `BatchRunner`
+
+**Trigger**: pages whose URL carries `aioe_run=<runId>`; pages without it never touch the queue.
+
+**Per query**:
+1. Compare the `q` parameter with `state.queries[state.queryIndex]`; on mismatch re-open the expected query instead of extracting the wrong page
+2. Claim the run (`pageToken`) so only one tab continues it
+3. Wait for `#m-x-content` up to `config.overviewTimeoutMs`
+4. Click the collapsed overview open and click inner "show more/show all" labels inside the container
+5. Wait until the rendered text stops growing (`config.settleMs` quiet period)
+6. Extract markdown + sources, store the result, advance `queryIndex`
+7. Wait `config.delayMs` + jitter, then navigate to the next query
+
+**Outcomes**: `ok`, `no-overview` (container missing or empty) and `error` (exception while extracting); captcha/`/sorry/` pages call `pauseRun()` and keep the queue position.
+
+**UI**: the bottom-right panel (`renderBadge()`) shows position, counts and a Pause button that writes `status: "paused"` to storage.
+
+**Error Handling**:
+- Missing overviews never abort the run
+- A storage listener aborts the loop as soon as the run is paused, removed or taken over by another tab
+
+---
+
 ### 🚀 Auto-Expansion Modules
 
 #### `auto-expander-overviews.js` - AI Overview Expansion
@@ -454,15 +522,25 @@ async handleWebhookSend(container, markdown) // Webhook dispatch
 **Class**: `ContentExtractor`
 
 **Content Cleaning Process**:
-1. Clone container to avoid DOM manipulation
-2. Remove `data-subtree="msc"` elements
-3. Remove sources section `div[style="height: 100%;"]`
-4. Remove hidden elements `[style*="display:none"]`
-5. Remove `<style>` and `<script>` tags
-6. Strip all `style` and `class` attributes
-7. Remove unwanted attributes (`data-ved`, `jsaction`, etc.)
-8. Clean inline JavaScript
-9. Normalize whitespace
+1. Mark descendants that are not rendered (no boxes and no rendered children) and drop them from the clone; `display: contents` wrappers are kept because their children are visible
+2. Clone container to avoid DOM manipulation
+3. Remove `data-subtree="msc"` elements
+4. Remove sources section `div[style="height: 100%;"]`
+5. Remove hidden elements `[style*="display:none"]`
+6. Remove `<style>` and `<script>` tags
+7. Strip all `style` and `class` attributes
+8. Remove unwanted attributes (`data-ved`, `jsaction`, etc.)
+9. Clean inline JavaScript
+10. Normalize whitespace
+
+**Key Methods**:
+```javascript
+extractContent(container)             // Extract and clean HTML
+extractSources(container)             // Extract source links
+markUnrenderedNodes(container)        // Mark invisible subtrees before cloning
+cleanGoogleUrl(url)                   // Remove Google wrappers
+extractSearchQuery()                  // Get search keyword from URL
+```
 
 **Source Extraction Process**:
 1. Find sources container `div[style="height: 100%;"]`
@@ -472,14 +550,6 @@ async handleWebhookSend(container, markdown) // Webhook dispatch
 5. Filter out Google internal links
 6. Generate titles from link text or hostname
 7. Deduplicate sources
-
-**Key Methods**:
-```javascript
-extractContent(container)             // Extract and clean HTML
-extractSources(container)             // Extract source links
-cleanGoogleUrl(url)                   // Remove Google wrappers
-extractSearchQuery()                  // Get search keyword from URL
-```
 
 **URL Cleaning**:
 - Removes `/url?` Google wrappers
@@ -497,8 +567,8 @@ extractSearchQuery()                  // Get search keyword from URL
 **Conversion Process**:
 1. Initialize TurndownService with custom rules
 2. Convert HTML content to Markdown
-3. Add search query header
-4. Append numbered source list
+3. Add the `# AI Overview` header and `**Search Query:**` line; both are optional per call (`options.includeHeader`, `options.includeSearchQuery`), and without the header a leading "AI Overview" label rendered by Google is stripped too
+4. Append numbered source list, skipped with `options.includeSources: false`
 5. Format final output
 
 **Turndown Configuration**:
@@ -524,7 +594,8 @@ addRule('ignoreSourceLinks', ...)     // Remove source section links
 
 **Key Methods**:
 ```javascript
-createMarkdown(htmlContent, sources, searchQuery) // Main conversion
+createMarkdown(htmlContent, sources, searchQuery, options) // Main conversion; options.includeHeader / includeSearchQuery / includeSources control the title, query line and sources list
+stripLeadingOverviewHeading(markdown) // Remove a leading "AI Overview" label rendered by Google
 downloadMarkdown(markdown)            // Trigger file download
 initializeTurndown()                  // Configure converter
 ```
@@ -868,6 +939,14 @@ await new WebhookManager().isConfigured()
 - **Popup**: Right-click popup → "Inspect"
 
 ### 🧪 Testing
+
+**Automated Tests**:
+```bash
+node --test
+```
+- `tests/batch-queue.test.js` covers `QueryTemplate` (placeholder discovery, value parsing, cartesian expansion, duplicate removal, query limit, search URLs) and `BatchStore` (state round trip, per-result keys, clearing, persisted inputs)
+- `tests/markdown-generator.test.js` covers the markdown post-processing: optional header/query line, stripping Google's own "AI Overview" label, and the sources section
+- No dependencies and no browser needed; the storage layer accepts an injected `storage.local` replacement and the markdown generator runs with a stubbed TurndownService
 
 **Manual Testing Checklist**:
 - [ ] Load extension in development mode

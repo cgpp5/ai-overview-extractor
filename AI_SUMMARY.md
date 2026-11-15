@@ -19,6 +19,8 @@ ai-overview-extractor/
 │   ├── auto-expander-overviews.js # Automatic AI overview expansion
 │   ├── auto-expander-sources.js   # Automatic source list expansion
 │   ├── auto-webhook.js        # Automatic webhook dispatch
+│   ├── batch-queue.js         # Query template expansion + batch run storage
+│   ├── batch-runner.js        # Content-script batch loop (one search per page load)
 │   ├── extraction-orchestrator.js # Manual extraction coordination
 │   ├── content-extractor.js   # Content and source extraction
 │   ├── markdown-generator.js  # Markdown conversion
@@ -65,6 +67,10 @@ ai-overview-extractor/
 - **`auto-expander-overviews.js`** - AI Overview expansion (`AutoExpanderOverviews`)
 - **`auto-expander-sources.js`** - Source list expansion (`AutoExpanderSources`) 
 - **`auto-webhook.js`** - Automatic webhook dispatch (`AutoWebhook`)
+
+### **Batch Layer**
+- **`batch-queue.js`** - Template expansion + run storage (`QueryTemplate`, `BatchStore`)
+- **`batch-runner.js`** - Batch loop driven by storage, one search per page load (`BatchRunner`)
 
 ### **Extraction System**
 - **`extraction-orchestrator.js`** - Manual extraction coordination (`ExtractionOrchestrator`)
@@ -300,6 +306,9 @@ cleanHTML.replace(/var\s+\w+\s*=\s*[^;]*;/g, '');
 ### **Storage keys:**
 - `ai-overview-webhook-url` - Webhook URL (string)
 - `ai-overview-settings` - Extension settings (object)
+- `aioe:batch:state` - Current batch run (runId, status, queryIndex, queries, config, counts, pageToken)
+- `aioe:batch:result:<runId>:<index>` - One extracted result per query (markdown, sources, url, status, extractedAt)
+- `aioe:batch:inputs` - Last used query template, variable values and batch options
 
 ## 🔄 **Execution Flow**
 1. **DOM Observer** - detects `#m-x-content`
@@ -405,7 +414,9 @@ testPayload: { test: true, timestamp: ISO_string, message: "Test..." }
 - **Integration:** Seamless with extension webhook functionality
 
 ## 🚀 **Version History**
-- **v1.0.7** - Current: Removed auto-extract functionality, modular architecture, complete documentation
+- **v1.0.9** - Current: Batch search automation (template + variable lists), JSON export, pause/resume, tests
+- **v1.0.8** - Fixed auto-expand sources (button selector + timing)
+- **v1.0.7** - Removed auto-extract functionality, modular architecture, complete documentation
 - **v1.0.6** - Auto-expand AI overviews, auto-expand sources, auto-webhook, settings system
 - **v1.0.5** - Chrome Web Store compliance fix - removed activeTab permission
 - **v1.0.4** - Complete English UI translation, documentation updates

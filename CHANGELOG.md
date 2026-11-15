@@ -2,6 +2,31 @@
 
 All notable changes to the AI Overview Extractor extension will be documented in this file.
 
+## [1.0.9] - 2026-11-15
+
+### ✨ Added
+- **Batch search automation** - the popup now accepts a query template such as `what are the main attractions in {city} in {month}` plus one value list per placeholder, and expands it into a queue (cartesian product, duplicate queries removed, 1000 query limit)
+- **Batch runner content script** (`src/batch-runner.js`) - loads each search, waits for `#m-x-content`, expands the collapsed overview, clicks inner "show more/show all" labels, waits for the text to settle, extracts markdown + sources and stores the result before opening the next query
+- **Shared queue module** (`src/batch-queue.js`) - `QueryTemplate` for expansion/search URLs and `BatchStore` for run state, per-result keys and last-used inputs
+- **On-page progress panel** - bottom-right badge with run position, counts and a Pause button
+- **JSON export** - `ai-overview-batch-<runId>.json` containing the template, variables, run configuration and every result (markdown, sources, url, extractedAt, status) plus a "Copy JSON" action
+- **Pause / resume / reset / clear** controls in the popup, with live progress via `storage.onChanged`
+- **No repeated query or heading in results** - the stored markdown body holds only the answer, the query stays in its own JSON field
+- **Sources are optional in the body** - the `Append sources to the markdown body` switch drops the `## Sources` list from the markdown while keeping the `sources` array in the JSON
+- **Node tests** - `node --test` covers template expansion and the batch storage layer
+
+### 🔧 Changed
+- Manifest version bumped to 1.0.9 and `src/batch-queue.js` / `src/batch-runner.js` added to the content script list
+- Content script now also matches `*://www.google.com/sorry/*` so a verification page can pause a batch run instead of silently stalling it
+- Content extraction drops elements that are not rendered (hidden sidebars, `aria-hidden` AI Mode panels), so results no longer contain invisible UI text
+- Popup widened to 400px and scrollable to fit the batch section; existing settings toggles unchanged
+
+### 🛡️ Reliability
+- Queue state is bound to a single tab through the `aioe_run` URL parameter and a per-tab ownership token, so reloads, restored sessions and other Google tabs cannot corrupt a run
+- Each query is stored under its own storage key, so a failure or a slow write never rewrites the whole result set
+- Queries without an AI Overview are recorded as `no-overview` (and listed in the popup) instead of aborting the run
+- Captcha / `/sorry/` pages pause the run and keep the current queue position for resuming
+
 ## [1.0.8] - 2025-12-06
 
 ### 🐛 Fixed

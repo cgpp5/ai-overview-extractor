@@ -19,6 +19,8 @@ Extension automatically detects AI Overview on Google results pages and enables 
 - 🔗 **Source extraction** with cleaned Google URLs
 - 💾 **Copy** to clipboard with one click
 - 📥 **Download** as .md file with timestamp
+- 🔁 **Batch search** - run one query template across variable lists (cities, months, ...) and extract every AI Overview automatically
+- 📤 **JSON export** - one file per run with the markdown, sources, URL and timestamp of every query
 - 🚀 **Webhooks** - automatic sending of data to external APIs
 - ⚙️ **Webhook configuration** - easy URL setup and connection testing
 - 🎨 **Clean interface** with preview and notifications
@@ -72,6 +74,55 @@ Extension automatically detects AI Overview on Google results pages and enables 
 3. **Test connection** with "🧪 Test" button
 4. **Save configuration** with "💾 Save" button
 5. **Send data** with "🚀 Send webhook" button
+
+### Batch search (many queries at once)
+Use this when you want the same question answered for many variables, for example attractions per city and month.
+
+1. **Open the popup** and fill the **Template** with `{placeholders}`:
+   `what are the main attractions in {city} in {month}`
+2. **One field per placeholder appears** - enter one value per line:
+   ```
+   {city}     {month}
+   Madrid     March
+   Paris      June
+   Rome       September
+   ```
+   The counter next to the title shows how many queries the lists produce (cartesian product, duplicates removed, hard limit 1000).
+3. **Set the options** (optional):
+   - **Delay (s)** - pause between searches, default 5 seconds (a random 0-1.5 s jitter is added)
+   - **Language** - `hl` parameter for the search URL, default `en`
+   - **Overview wait (s)** - how long to wait for the AI Overview on each page, default 10 seconds
+   - **Append sources to the markdown body** - checked by default; uncheck it to store only the answer text. The `sources` array is always kept in the JSON either way.
+4. **Click "Start / resume"** - the extension opens (or reuses) a Google Search tab and starts the queue.
+5. **Let it run** - each page is loaded, the AI Overview is expanded, the markdown and sources are extracted, and the result is stored before the next search starts. A small panel in the bottom-right corner of the page shows progress and has a **Pause** button.
+6. **Export** - when the run finishes press **Export JSON**. The file `ai-overview-batch-<runId>.json` contains the template, the variables, the run configuration and one entry per query:
+   ```json
+   {
+     "run": { "runId": "run-20250106123000-ab12", "template": "...", "total": 9, "counts": { "ok": 8, "noOverview": 1, "error": 0 } },
+     "results": [
+       {
+         "index": 0,
+         "query": "what are the main attractions in Madrid in March",
+         "variables": { "city": "Madrid", "month": "March" },
+         "status": "ok",
+         "markdown": "Madrid in March offers mild spring weather ...",
+         "sources": [{ "title": "Retiro Park guide", "url": "https://..." }],
+         "url": "https://www.google.com/search?q=...",
+         "extractedAt": "2025-01-06T12:30:11.000Z"
+       }
+     ]
+   }
+   ```
+   **Copy JSON** puts the same payload on the clipboard.
+
+**Behaviour worth knowing**
+
+- Queries without an AI Overview are stored with `"status": "no-overview"` and listed in the popup, so you can review them instead of guessing what is missing.
+- The `markdown` field starts at the answer itself: no `# AI Overview` heading and no query line, because the query already has its own field.
+- The run keeps going if a single query fails; failures are stored with `"status": "error"` and the error message.
+- If Google shows a captcha or `/sorry/` page, the run pauses itself. Solve it in the tab, then press **Start / resume**.
+- Pausing keeps every result already stored. **Reset run** only clears the queue pointer; **Clear results** deletes the stored results of all runs.
+- The queue lives in extension storage and is tied to the tab through the `aioe_run` URL parameter, so reloads and normal browsing in other tabs never touch it.
 
 ### Example webhook URLs
 ```
@@ -157,6 +208,8 @@ ai-overview-extractor/
 │   ├── auto-expander-overviews.js    # Automatic AI overview expansion
 │   ├── auto-expander-sources.js      # Automatic source list expansion
 │   ├── auto-webhook.js               # Automatic webhook dispatch
+│   ├── batch-queue.js                # Query template expansion and batch run storage
+│   ├── batch-runner.js               # Content-script batch loop (one search per page load)
 │   ├── extraction-orchestrator.js    # Manual extraction coordination
 │   ├── content-extractor.js          # Content and source extraction
 │   ├── markdown-generator.js         # Markdown conversion
@@ -186,6 +239,8 @@ ai-overview-extractor/
 │   ├── setup-instructions.md               # Installation instructions
 │   ├── template-description.md             # Detailed template description
 │   └── template-name.txt                   # Template name
+├── tests/            # Node tests (no dependencies)
+│   └── batch-queue.test.js                 # Template expansion and batch storage
 └── docs/             # Publication and legal documentation
     ├── chrome-web-store-description.md         # Chrome Web Store description
     ├── chrome-web-store-privacy-justifications.md # Chrome privacy justifications
@@ -236,6 +291,7 @@ To add other Google domains, edit `content_scripts.matches` section in `manifest
 
 ### Content Extraction
 - Removes elements with `data-subtree="msc"` (MSC elements)
+- Removes elements that are not rendered at all (hidden sidebars, `aria-hidden` AI Mode panels); elements with `display: contents` are kept because their children are visible
 - Removes elements with `style="display:none"` (hidden elements)
 - Removes sources container before conversion
 - Converts HTML to Markdown using TurndownService
@@ -252,6 +308,13 @@ To add other Google domains, edit `content_scripts.matches` section in `manifest
 - **Unified Container Detection** - Multiple fallback strategies with debouncing
 - **Enhanced Debugging** - `getAutomationStatus()` and `resetAutomation()` methods
 - **Robust Error Handling** - Automatic fallback to manual mode
+
+### Batch Runner
+- **Storage-driven queue** - `aioe:batch:state` holds the expanded queries and the current position; every result is written to its own key (`aioe:batch:result:<runId>:<index>`)
+- **Tab binding through the URL** - batch searches carry `aioe_run=<runId>`; only pages with that marker touch the queue, and `pageToken` makes the newest tab the owner of a run
+- **Per-query flow** - wait for `#m-x-content`, click the collapsed overview open, click inner "show more/show all" labels, wait until the text stops growing, then extract markdown and sources
+- **Outcome recording** - `ok`, `no-overview` (no AI Overview for that query) or `error`, each with markdown, sources, URL and timestamp
+- **Pause, resume, recover** - pausing only changes the stored state; resuming re-opens the pending query, and a captcha/`/sorry/` page pauses the run instead of failing it
 
 ### Webhooks
 - **Automatic sending** of data to external APIs via POST method
@@ -336,7 +399,15 @@ To update the extension:
 
 ## 📝 Changelog
 
-### v1.0.8 (current)
+### v1.0.9 (current)
+- 🔁 **Batch search automation** - one query template plus variable lists is expanded into a queue (cartesian product, duplicates removed, limit 1000) and run automatically
+- 🤖 **Batch runner** - a new content-script module loads each search, expands the AI Overview, extracts markdown and sources, stores the result and moves to the next query
+- 🧭 **Tab-bound queue** - searches carry an `aioe_run` URL marker and a per-tab ownership token, so reloads, restored tabs and other Google tabs never disturb a run
+- ⏸️ **Pause / resume / recovery** - popup controls plus an on-page progress panel; captcha and `/sorry/` pages pause the run instead of failing it
+- 📤 **JSON export** - `ai-overview-batch-<runId>.json` with every query, its markdown, sources, URL, timestamp and status (`ok`, `no-overview`, `error`)
+- 🧪 **Tests** - `node --test` covers template expansion and the batch storage layer
+
+### v1.0.8
 - 🐛 **Fixed auto-expand sources functionality** - Fixed critical issue where sources were not expanding automatically
 - 🔧 **Button selector bug** - Fixed jsaction selector from `^="trigger"` to `*="trigger"` to properly match `jsaction="trigger.Wyhgxe"`
 - ⏱️ **Timing improvements** - Increased delays for better DOM loading stability (1500ms, 1000ms, 3000ms)

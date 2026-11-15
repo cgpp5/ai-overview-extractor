@@ -28,19 +28,33 @@ class MarkdownGenerator {
         return turndownService;
     }
 
-    createMarkdown(htmlContent, sources, searchQuery = null) {
+    createMarkdown(htmlContent, sources, searchQuery = null, options = {}) {
         console.log('[MarkdownGenerator] Tworzę markdown z treścią i źródłami:', sources);
 
-        let markdown = this.turndownService.turndown(htmlContent);
+        const includeSearchQuery = options.includeSearchQuery !== false;
+        const includeHeader = options.includeHeader !== false;
+        const includeSources = options.includeSources !== false;
+
+        let body = this.turndownService.turndown(htmlContent).trim();
+
+        if (!includeHeader) {
+            body = this.stripLeadingOverviewHeading(body);
+        }
 
         // Add main header with search keyword
-        let header = '# AI Overview';
-        if (searchQuery) {
-            header += `\n\n**Search Query:** ${searchQuery}`;
+        const headerParts = [];
+        if (includeHeader) {
+            headerParts.push('# AI Overview');
         }
-        markdown = `${header}\n\n${markdown.trim()}\n`;
+        if (searchQuery && includeSearchQuery) {
+            headerParts.push(`**Search Query:** ${searchQuery}`);
+        }
 
-        if (sources && sources.length > 0) {
+        let markdown = headerParts.length > 0
+            ? `${headerParts.join('\n\n')}\n\n${body}\n`
+            : `${body}\n`;
+
+        if (includeSources && sources && sources.length > 0) {
             console.log(`[MarkdownGenerator] Adding ${sources.length} sources to markdown`);
             markdown += '\n## Sources\n\n';
             sources.forEach((source, index) => {
@@ -51,6 +65,33 @@ class MarkdownGenerator {
         }
 
         return markdown;
+    }
+
+    /**
+     * Google renders its own "AI Overview" heading inside the container, which
+     * ends up as a heading or bold line at the top of the markdown. When the
+     * caller does not want a header, the label is dropped so the text starts
+     * with the answer itself.
+     */
+    stripLeadingOverviewHeading(markdown) {
+        const label = /^(?:#{1,6}\s*)?(?:\*\*)?AI Overview(?:\*\*)?\s*$/i;
+        const lines = markdown.split('\n');
+
+        while (lines.length > 0) {
+            let index = 0;
+
+            while (index < lines.length && lines[index].trim() === '') {
+                index++;
+            }
+
+            if (index >= lines.length || !label.test(lines[index].trim())) {
+                break;
+            }
+
+            lines.splice(index, 1);
+        }
+
+        return lines.join('\n').trim();
     }
 
     downloadMarkdown(markdown) {

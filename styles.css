@@ -294,3 +294,84 @@
         padding: 10px;
     }
 }
+
+/* Panel postępu automatyzacji wsadowej (batch runner) */
+.aioe-batch-badge {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2147483000;
+    width: 264px;
+    padding: 12px 14px;
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #3c4043;
+    text-align: left;
+}
+
+.aioe-batch-badge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.aioe-batch-badge-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a73e8;
+}
+
+.aioe-batch-badge-close {
+    background: transparent;
+    border: none;
+    color: #5f6368;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.aioe-batch-badge-close:hover {
+    color: #202124;
+}
+
+.aioe-batch-badge-query {
+    font-weight: 500;
+    color: #202124;
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+
+.aioe-batch-badge-status {
+    color: #5f6368;
+    margin-bottom: 4px;
+}
+
+.aioe-batch-badge-counts {
+    color: #5f6368;
+    font-size: 11px;
+    margin-bottom: 8px;
+}
+
+.aioe-batch-badge-pause {
+    width: 100%;
+    padding: 6px 10px;
+    background: #e8f0fe;
+    color: #1a73e8;
+    border: none;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.aioe-batch-badge-pause:hover {
+    background: #d2e3fc;
+}

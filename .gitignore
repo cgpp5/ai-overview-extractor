@@ -1,4 +1,24 @@
+# OS files
 .DS_Store
+Thumbs.db
+
+# Packaged extension builds
 *.zip
-docs/chrome-web-store-checklist.md
+*.xpi
+web-ext-artifacts/
+
+# Dependencies (tests use the Node built-in runner, so nothing is installed)
+node_modules/
+
+# Logs and local environment
+*.log
+.env
+.env.*
+
+# Local editor / agent configuration
 .clinerules
+.copilot/
+.vscode/
+
+# Store submission scratch files
+docs/chrome-web-store-checklist.md

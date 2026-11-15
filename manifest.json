@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
     "name": "AI Overview Extractor",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Extract AI Overviews content from Google Search to Markdown format",
   
   "browser_specific_settings": {
@@ -21,7 +21,8 @@
   "content_scripts": [
     {
       "matches": [
-        "*://www.google.com/search*"
+        "*://www.google.com/search*",
+        "*://www.google.com/sorry/*"
       ],
       "js": [
         "src/turndown.js", 
@@ -35,6 +36,8 @@
         "src/auto-webhook.js",
         "src/content-extractor.js",
         "src/markdown-generator.js",
+        "src/batch-queue.js",
+        "src/batch-runner.js",
         "src/ui-manager.js",
         "src/extraction-orchestrator.js",
         "src/content.js"

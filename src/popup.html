@@ -10,7 +10,7 @@
     <div class="popup-container">
         <div class="header">
             <h3>🤖 AI Overview Extractor</h3>
-            <div class="version">v1.0.8</div>
+            <div class="version">v1.0.9</div>
         </div>
         
         <div class="settings-section">
@@ -55,6 +55,53 @@
             
         </div>
 
+        <div class="batch-section">
+            <div class="batch-header">
+                <span class="batch-title">Batch search</span>
+                <span class="batch-count" id="batchCount">0 queries</span>
+            </div>
+
+            <label class="batch-label" for="batchTemplate">Template with {placeholders}</label>
+            <textarea id="batchTemplate" class="batch-input batch-textarea" rows="2"
+                placeholder="what are the main attractions in {city} in {month}"></textarea>
+            <p class="batch-hint">Write the sentence and put the parts that change inside curly braces. A box appears below for every placeholder: one value per line.</p>
+
+            <div id="batchVariables" class="batch-variables"></div>
+
+            <details class="batch-advanced">
+                <summary>Options</summary>
+                <div class="batch-options">
+                    <label class="batch-option">
+                        <span>Delay (s)</span>
+                        <input id="batchDelay" class="batch-input" type="number" min="1" max="120" step="1" value="5">
+                    </label>
+                    <label class="batch-option">
+                        <span>Language</span>
+                        <input id="batchLanguage" class="batch-input" type="text" placeholder="en" value="en">
+                    </label>
+                    <label class="batch-option">
+                        <span>Overview wait (s)</span>
+                        <input id="batchTimeout" class="batch-input" type="number" min="5" max="120" step="1" value="10">
+                    </label>
+                </div>
+                <label class="batch-check">
+                    <input id="batchIncludeSources" type="checkbox" checked>
+                    <span>Append sources to the markdown body</span>
+                </label>
+            </details>
+
+            <div class="batch-actions">
+                <button id="batchStartBtn" class="batch-btn primary">Start / resume</button>
+                <button id="batchPauseBtn" class="batch-btn">Pause</button>
+                <button id="batchExportBtn" class="batch-btn">Export JSON</button>
+                <button id="batchCopyBtn" class="batch-btn">Copy JSON</button>
+                <button id="batchResetBtn" class="batch-btn ghost">Reset run</button>
+                <button id="batchClearBtn" class="batch-btn ghost">Clear results</button>
+            </div>
+
+            <div class="batch-progress" id="batchProgress">No batch run yet</div>
+        </div>
+
         <div class="status-section">
             <div class="status-item" id="statusMessage">
                 <span class="status-icon">⚙️</span>
@@ -71,6 +118,7 @@
     </div>
 
     <script src="settings-manager.js"></script>
+    <script src="batch-queue.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>
